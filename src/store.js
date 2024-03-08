@@ -1032,6 +1032,15 @@ function get(Model, id) {
     try {
       let result = config.storage.get(id);
 
+      if (
+        !(result instanceof Promise) &&
+        (result === undefined || typeof result !== "object")
+      ) {
+        throw TypeError(
+          `Storage 'get' method must return a Promise, an instance, or null: ${result}`,
+        );
+      }
+
       if (typeof result !== "object" || result === null) {
         if (offline) offline.set(stringId, null);
         throw notFoundError(Model, stringId);
@@ -1196,9 +1205,22 @@ function set(model, values = {}) {
 
     id = localModel ? localModel.id : model.id;
 
-    const result = Promise.resolve(
-      config.storage.set(isInstance ? id : undefined, localModel, keys),
-    )
+    let result = config.storage.set(
+      isInstance ? id : undefined,
+      localModel,
+      keys,
+    );
+
+    if (
+      !(result instanceof Promise) &&
+      (result === undefined || typeof result !== "object")
+    ) {
+      throw TypeError(
+        `Storage 'set' method must return a Promise, an instance, or null: ${result}`,
+      );
+    }
+
+    result = Promise.resolve(result)
       .then((data) => {
         const resultModel =
           data === localModel ? localModel : config.create(data);
@@ -1501,15 +1523,17 @@ function resolveModel(Model, config, id, lastModel) {
 }
 
 function resolveDraft(Model, draft, id, value, lastValue) {
-  if (
-    !id &&
-    (draft.enumerable || !lastValue) &&
-    (value === undefined || value === null)
-  ) {
+  if (!id && draft.enumerable && (value === undefined || value === null)) {
     const draftModel = draft.create({});
     id = draftModel.id;
 
     syncCache(draft, draftModel.id, draftModel, false);
+  } else if (
+    !draft.enumerable &&
+    !lastValue &&
+    (value === undefined || value === null)
+  ) {
+    clear(Model);
   }
 
   return get(Model, id);

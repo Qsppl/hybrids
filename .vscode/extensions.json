@@ -1,0 +1,8 @@
+{
+    "recommendations": [
+        "editorconfig.editorconfig",
+        "bashmish.es6-string-css",
+        "tobermory.es6-string-html",
+        "rvest.vs-code-prettier-eslint"
+    ]
+}

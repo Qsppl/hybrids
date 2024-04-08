@@ -1,3 +1,45 @@
+type Join<K, P> = K extends string | number ? (P extends string | number ? `${K}${"" extends P ? "" : "."}${P}` : never) : never;
+
+type Prev = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, ...0[]];
+
+type TypeOfValues<T extends object> = T[keyof T];
+
+type IsDeeperThan<T, Deep extends number> =
+  // this is an object
+  T extends object
+    ? // and we cannot look at its nested objects
+      [Deep] extends [never]
+      ? // and it has nested objects, then the structure is guaranteed to be deeper than the maximum depth
+        TypeOfValues<T> extends object
+        ? true
+        : // otherwise the structure is guaranteed to be no deeper than the maximum depth
+          false
+      : // or if we can view its nested objects
+        {
+          [K in keyof T]-?: K extends string | number
+            ? // then we repeat everything at the next level of depth
+              IsDeeperThan<T[K], Prev[Deep]>
+            : never;
+        }[keyof T]
+    : // or if it's not an object at all, then we are guaranteed not to go beyond the depth limits
+      false;
+
+type PathsFabric<T, Deep extends number> = [Deep] extends [never]
+  ? never
+  : T extends object
+    ? {
+        [K in keyof T]-?: K extends string | number ? `${K}` | Join<K, PathsFabric<T[K], Prev[Deep]>> : never;
+      }[keyof T]
+    : "";
+
+type Paths<T, Deep extends number = 10> =
+  // if the structure goes deeper than the maximum depth
+  IsDeeperThan<T, Deep> extends true
+    ? // then we say that the paths can be the ones we found or any others
+      PathsFabric<T, Deep> | String | "qqq"
+    : // otherwise we say that the paths can only be those that have been found
+      PathsFabric<T, Deep>;
+
 export type Property<E, V> =
   | (V extends string | number | boolean | undefined ? V : never)
   | ((host: E & HTMLElement, lastValue: V) => V)
@@ -386,9 +428,9 @@ export function html<E>(
 
 export namespace html {
   function set<E>(property: keyof E, valueOrPath?: any): EventHandler<E>;
-  function set<E, M>(
+  function set<E, M extends ModelInstance>(
     property: M,
-    valueOrPath: string | null,
+    valueOrPath: Paths<M, 1> | null
   ): EventHandler<E>;
 
   function resolve<E>(

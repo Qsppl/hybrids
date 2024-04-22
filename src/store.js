@@ -1548,7 +1548,7 @@ function store(Model, options = {}) {
     );
   }
 
-  let draft;
+  let draftConfig;
   if (options.draft) {
     if (config.list) {
       throw TypeError(
@@ -1556,21 +1556,27 @@ function store(Model, options = {}) {
       );
     }
 
-    draft = bootstrap({
-      ...Model,
-      [connect]: {
-        get(id) {
-          const model = get(config.model, id);
-          return pending(model) || model;
+    const draft = deepCopyDefinitionStructure(Model, (origin) => {
+      const draft = {
+        ...origin,
+        [connect]: {
+          get(id) {
+            const model = get(bootstrap(origin).model, id);
+            return pending(model) || model;
+          },
+          set(id, values) {
+            return values === null ? { id } : values;
+          },
         },
-        set(id, values) {
-          return values === null ? { id } : values;
-        },
-      },
+      };
+
+      const draftConfig = bootstrap(draft);
+      draftMap.set(draftConfig, bootstrap(origin));
+      return draftConfig.model;
     });
 
-    draftMap.set(draft, config);
-    Model = draft.model;
+    draftConfig = bootstrap(draft);
+    Model = draftConfig.model;
 
     return {
       get(host, value) {
@@ -1582,12 +1588,12 @@ function store(Model, options = {}) {
 
           if (value === undefined || value === null) {
             if (config.enumerable) {
-              const draftModel = draft.create({});
+              const draftModel = draftConfig.create({});
               id = draftModel.id;
 
-              syncCache(draft, draftModel.id, draftModel, false);
+              syncCache(draftConfig, draftModel.id, draftModel, false);
             } else {
-              clear(draft.model);
+              clear(draftConfig.model);
             }
           }
         }
@@ -1633,6 +1639,80 @@ function store(Model, options = {}) {
     },
     set: (_, v) => v,
   };
+}
+
+function isModelDefinition(value) {
+  return !!value?.[connect];
+}
+
+function deepCopyDefinitionStructure(
+  originDefinition,
+  replace = (definition) => Object.clone(definition),
+  localIndex = null,
+) {
+  let definition = localIndex?.get(originDefinition);
+  if (definition) return definition;
+
+  localIndex = localIndex ?? new WeakMap();
+  definition = replace(
+    interceptRelations(originDefinition, (originDefinition) =>
+      deepCopyDefinitionStructure(
+        originDefinition,
+        replace,
+        localIndex,
+      ),
+    ),
+  );
+
+  return definition;
+}
+
+function interceptRelations(definition, onInterceptDefinition) {
+  return createPropertiesProxy(definition, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+
+      if (Array.isArray(value) && isModelDefinition(value[0]))
+        return [onInterceptDefinition(value[0])];
+      if (isModelDefinition(value)) return onInterceptDefinition(value);
+
+      return value;
+    },
+    set(target, property, value, receiver) {
+      return Reflect.set(target, property, value, receiver);
+    },
+  });
+}
+
+function createPropertiesProxy(target, handler) {
+  const originTarget = target;
+
+  const originHandlers = handler;
+
+  const proxyObject = Object.create(target);
+
+  for (const property in originTarget) {
+    const RemappedHandlers = {
+      get() {
+        return handler.get(originTarget, property, this);
+      },
+      set(value) {
+        return handler.set(originTarget, property, value, this);
+      },
+    };
+
+    if (!("get" in originHandlers)) delete RemappedHandlers["get"];
+
+    if (!("set" in originHandlers)) delete RemappedHandlers["set"];
+
+    Object.defineProperty(proxyObject, property, {
+      ...RemappedHandlers,
+      configurable: true,
+      enumerable: true,
+    });
+  }
+
+  return proxyObject;
 }
 
 export default Object.freeze(

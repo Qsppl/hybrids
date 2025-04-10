@@ -68,7 +68,7 @@ const PrimitivePositiveCases: Model<IPrimitivePositiveCases> = {
   fieldWithDefaultValue: false,
   fieldCalculatedAsValue: ({ fieldWithDefaultValue }) => fieldWithDefaultValue,
   optionalFieldWithDefaultValue: false,
-  optionalFieldCalculatedAsValue: ({ optionalFieldWithDefaultValue }) => optionalFieldWithDefaultValue,
+  optionalFieldCalculatedAsValue: ({ optionalFieldWithDefaultValue }) => optionalFieldWithDefaultValue || false,
 
   // boolean[] = boolean[]
   listedFieldWithDefaultValues: [false],

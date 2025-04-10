@@ -93,9 +93,30 @@ export type EnumerableInstance = { id: ModelIdentifier } & ModelInstance;
 export type SingletonInstance = { id?: never } & ModelInstance;
 
 export type Unarray<T> = T extends Array<infer U> ? U : T;
-export type NonConstructor = { readonly prototype?: never };
+export type StrictFunction<T extends (...args: any) => any> = T & { new?: never, prototype?: never };
 export type NonArrayObject = { [Symbol.iterator]?: never } & object;
 export type NonModelDefinition = { __store__connect__?: never } & object;
+
+type DefferedFieldDefinition<T> =
+  // If a model property contains strings, then in the repository the user will be able to define the property as a protected string.
+  // This will allow you to preserve as much information about values ​​of other types (boolean, number, undefined, null) as possible.
+  string extends T
+    ? string
+    // By the same logic, for a field with the type (boolean, undefined, null), we propose a property protected as a number
+    : number extends T
+      ? number
+      // otherwise boolean
+      : boolean extends T
+        ? boolean
+        // if the enumerated property of the model contains strings, then in the store the user will be able to define the enumerated property as a protected string array.
+        // This will allow you to preserve as much information about values ​​of other types (boolean, number, undefined, null) as possible.
+        : string extends Unarray<T>
+          ? [string, ...Array<T>] | [StringConstructor]
+          : number extends Unarray<T>
+            ? [number, ...Array<T>] | [NumberConstructor]
+            : boolean extends Unarray<T>
+              ? [boolean, ...Array<T>] | [BooleanConstructor]
+              : ... todo: write logic for EnumerableModel and [EnumerableModel]
 
 export type Model<M extends ModelInstance> = NonArrayObject & {
   [property in keyof Omit<M, "id">]-?: NonNullable<
@@ -103,31 +124,21 @@ export type Model<M extends ModelInstance> = NonArrayObject & {
   > extends Array<any>
     ?
         | NestedArrayModel<NonNullable<M[property]>>
-        | (NonConstructor &
-            ((
-              model: M,
-            ) => undefined extends M[property]
-              ? undefined | NestedArrayModel<M[property]>
-              : NestedArrayModel<M[property]>))
+        | (StrictFunction<(model: M) => undefined extends M[property] ? NestedArrayModel<M[property]> : NestedArrayModel<M[property]>>)
     : NonNullable<M[property]> extends string | String
-      ? string | (NonConstructor & ((model: M) => M[property]))
+      ? string | (StrictFunction<(model: M) => string>)
       : NonNullable<M[property]> extends number | Number
-        ? number | (NonConstructor & ((model: M) => M[property]))
+        ? number | (StrictFunction<(model: M) => number>)
         : NonNullable<M[property]> extends boolean | Boolean
-          ? boolean | (NonConstructor & ((model: M) => M[property]))
+          ? boolean | (StrictFunction<(model: M) => boolean>)
           : NonNullable<M[property]> extends ModelInstance
             ?
                 | Model<NonNullable<M[property]>>
-                | (NonConstructor &
-                    ((
-                      model: M,
-                    ) => undefined extends M[property]
-                      ? undefined | Model<NonNullable<M[property]>>
-                      : Model<NonNullable<M[property]>>))
+                | (StrictFunction<(model: M) => undefined extends M[property] ? undefined | Model<NonNullable<M[property]>> : Model<NonNullable<M[property]>>>)
             : NonNullable<M[property]> extends NonArrayObject
               ?
                   | NonNullable<M[property]>
-                  | (NonConstructor & ((model: M) => M[property]))
+                  | (StrictFunction<(model: M) => M[property]>)
               : never;
 } & (M extends EnumerableInstance
     ? {
@@ -139,11 +150,11 @@ export type Model<M extends ModelInstance> = NonArrayObject & {
 
 export type NestedArrayModel<T> =
   NonNullable<Unarray<T>> extends string | String
-    ? T | string[] | [String | StringConstructor]
+    ? T | string[] | [StringConstructor]
     : NonNullable<Unarray<T>> extends number | Number
-      ? T | number[] | [Number | NumberConstructor]
+      ? T | number[] | [NumberConstructor]
       : NonNullable<Unarray<T>> extends boolean | Boolean
-        ? T | boolean[] | [Boolean | BooleanConstructor]
+        ? T | boolean[] | [BooleanConstructor]
         : NonNullable<Unarray<T>> extends EnumerableInstance
           ?
               | [Model<NonNullable<Unarray<T>>>]

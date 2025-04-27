@@ -97,45 +97,44 @@ export type StrictFunction<T extends (...args: any) => any> = T & { new?: never,
 export type NonArrayObject = { [Symbol.iterator]?: never } & object;
 export type NonModelDefinition = { __store__connect__?: never } & object;
 
-type DefferedFieldDefinition<T> =
+type DifinitionOfFieldWithDefferedType<T> =
+  NonNullable<T> extends ModelInstance
+    ? ModelDefinition<NonNullable<T>>
   // If a model property contains strings, then in the repository the user will be able to define the property as a protected string.
   // This will allow you to preserve as much information about values ​​of other types (boolean, number, undefined, null) as possible.
-  string extends T
+  : string | String extends T
     ? string
     // By the same logic, for a field with the type (boolean, undefined, null), we propose a property protected as a number
-    : number extends T
+  : number | Number extends T
       ? number
-      // otherwise boolean
-      : boolean extends T
-        ? boolean
-        // if the enumerated property of the model contains strings, then in the store the user will be able to define the enumerated property as a protected string array.
-        // This will allow you to preserve as much information about values ​​of other types (boolean, number, undefined, null) as possible.
-        : string extends Unarray<T>
-          ? [string, ...Array<T>] | [StringConstructor]
-          : number extends Unarray<T>
-            ? [number, ...Array<T>] | [NumberConstructor]
-            : boolean extends Unarray<T>
-              ? [boolean, ...Array<T>] | [BooleanConstructor]
-              : ... todo: write logic for EnumerableModel and [EnumerableModel]
+  // otherwise boolean
+  : boolean | Boolean extends T
+    ? boolean
+  // if the enumerated property of the model contains strings, then in the store the user will be able to define the enumerated property as a protected string array.
+  // This will allow you to preserve as much information about values ​​of other types (boolean, number, undefined, null) as possible.
+  : NonNullable<Unarray<T>> extends EnumerableInstance
+    ? [ModelDefinition<NonNullable<Unarray<T>>>] | [ModelDefinition<NonNullable<Unarray<T>>>, { loose?: boolean }]
+  : string | String extends Unarray<T>
+    ? [string, ...Array<T>] | [StringConstructor]
+  : number | Number extends Unarray<T>
+    ? [number, ...Array<T>] | [NumberConstructor]
+  : boolean | Boolean extends Unarray<T>
+    ? [boolean, ...Array<T>] | [BooleanConstructor]
+  : never
 
 export type Model<M extends ModelInstance> = NonArrayObject & {
-  [property in keyof Omit<M, "id">]-?: NonNullable<
-    M[property]
-  > extends Array<any>
-    ?
-        | NestedArrayModel<NonNullable<M[property]>>
-        | (StrictFunction<(model: M) => undefined extends M[property] ? NestedArrayModel<M[property]> : NestedArrayModel<M[property]>>)
+  [property in keyof Omit<M, "id">]-?:
+    NonNullable<M[property]> extends Array<any>
+      ? NestedArrayModel<NonNullable<M[property]>> | (StrictFunction<(model: M) => undefined extends M[property] ? NestedArrayModel<M[property]> : NestedArrayModel<M[property]>>)
     : NonNullable<M[property]> extends string | String
-      ? string | (StrictFunction<(model: M) => string>)
-      : NonNullable<M[property]> extends number | Number
-        ? number | (StrictFunction<(model: M) => number>)
-        : NonNullable<M[property]> extends boolean | Boolean
-          ? boolean | (StrictFunction<(model: M) => boolean>)
-          : NonNullable<M[property]> extends ModelInstance
-            ?
-                | Model<NonNullable<M[property]>>
-                | (StrictFunction<(model: M) => undefined extends M[property] ? undefined | Model<NonNullable<M[property]>> : Model<NonNullable<M[property]>>>)
-            : NonNullable<M[property]> extends NonArrayObject
+      ? string | StrictFunction<(model: M) => string>
+    : NonNullable<M[property]> extends number | Number
+      ? number | StrictFunction<(model: M) => number>
+    : NonNullable<M[property]> extends boolean | Boolean
+      ? boolean | StrictFunction<(model: M) => boolean>
+    : NonNullable<M[property]> extends ModelInstance
+      ? Model<NonNullable<M[property]>> | (StrictFunction<(model: M) => undefined extends M[property] ? undefined | Model<NonNullable<M[property]>> : Model<NonNullable<M[property]>> >)
+    : NonNullable<M[property]> extends NonArrayObject
               ?
                   | NonNullable<M[property]>
                   | (StrictFunction<(model: M) => M[property]>)
@@ -147,6 +146,8 @@ export type Model<M extends ModelInstance> = NonArrayObject & {
     : {}) & {
     __store__connect__?: Storage<M> | Storage<M>["get"];
   };
+
+type ModelDefinition<M extends ModelInstance> = Model<M>
 
 export type NestedArrayModel<T> =
   NonNullable<Unarray<T>> extends string | String
